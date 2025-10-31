@@ -1,15 +1,18 @@
 // netlify/functions/api.js
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const axios = require("axios"); // ✅ Fixed for Netlify
+
 import * as cheerio from "cheerio";
 import dns from "dns/promises";
 import tls from "tls";
 import { URL } from "url";
 
 /*
-  Updated Deep Scanner API for Netlify Functions
-  - safe dynamic axios import via getAxios()
-  - endpoints:
-      /news?source=vnexpress|dantri|24h
-      /scan?url=...&deep=true&maxLinks=20&followExternal=false
+  Deep Scanner API for Netlify
+  endpoints:
+    /news?source=vnexpress|dantri|24h
+    /scan?url=https://example.com&deep=true
 */
 
 let _axios = null;
