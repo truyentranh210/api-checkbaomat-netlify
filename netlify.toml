@@ -2,6 +2,10 @@
   functions = "netlify/functions"
   node_bundler = "esbuild"
 
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["axios", "cheerio"]
+
 [[redirects]]
   from = "/news"
   to = "/.netlify/functions/api/news"
