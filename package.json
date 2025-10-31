@@ -1,12 +1,9 @@
 {
-  "name": "bao-api",
-  "version": "4.0.0",
+  "name": "bao-api-vietnam",
+  "version": "5.0.0",
   "type": "module",
   "dependencies": {
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12"
-  },
-  "scripts": {
-    "start": "netlify dev"
   }
 }
