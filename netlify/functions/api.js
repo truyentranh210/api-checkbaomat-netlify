@@ -1,227 +1,228 @@
-// ✅ Safe imports (works perfectly on Netlify Node 18/20)
+// =============================================
+// 📚 API TỔNG HỢP BÁO + KIỂM TRA WEBSITE (VIỆT HÓA)
+// =============================================
+
 import axios from "axios";
 import * as cheerio from "cheerio";
 import dns from "dns/promises";
 import tls from "tls";
 import { URL } from "url";
 
-/*
-  🔍 Deep Web Scanner API
-  Endpoints:
-    /news?source=vnexpress|dantri|24h
-    /scan?url=https://example.com&deep=true
-*/
-
+// =================================================
+// ✅ HÀM CHÍNH - PHÂN LUỒNG API
+// =================================================
 export async function handler(event) {
-  const path = event.path.replace("/.netlify/functions/api", "").replace("/", "");
+  const duongdan = event.path.replace("/.netlify/functions/api", "").replace("/", "");
 
-  if (path.startsWith("news")) return getNews(event);
-  if (path.startsWith("scan")) return scanSite(event);
+  if (duongdan.startsWith("bao")) return layTinTuc(event);
+  if (duongdan.startsWith("kiemtra")) return quetTrangWeb(event);
 
   return {
     statusCode: 404,
-    body: JSON.stringify({ error: "Not Found. Use /news or /scan endpoints." })
+    body: JSON.stringify({ loi: "Không tìm thấy API. Dùng /bao hoặc /kiemtra" })
   };
 }
 
-/* ========================= 📰 NEWS API ========================= */
-async function getNews(event) {
+// =================================================
+// 📰 LẤY TIN TỨC MỚI NHẤT
+// =================================================
+async function layTinTuc(event) {
   const q = event.queryStringParameters || {};
-  const source = (q.source || "vnexpress").toLowerCase();
+  const nguon = (q.nguon || "vnexpress").toLowerCase();
 
-  const sources = {
+  const nguonBao = {
     vnexpress: "https://vnexpress.net/",
     dantri: "https://dantri.com.vn/",
     "24h": "https://www.24h.com.vn/"
   };
-  const url = sources[source] || sources.vnexpress;
+
+  const url = nguonBao[nguon] || nguonBao.vnexpress;
 
   try {
-    const { data } = await axios.get(url, { timeout: 10000, headers: { "User-Agent": "Netlify-NewsBot/1.0" } });
-    const $ = cheerio.load(data);
-    const list = [];
+    const { data } = await axios.get(url, {
+      timeout: 10000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "vi,en;q=0.9",
+        "Referer": "https://www.google.com/"
+      }
+    });
 
-    if (source === "vnexpress") {
+    const $ = cheerio.load(data);
+    const baiBao = [];
+
+    if (nguon === "vnexpress") {
       $(".item-news a.thumb-art").each((i, el) => {
-        if (i < 10) list.push({ title: $(el).attr("title") || $(el).text().trim(), link: $(el).attr("href") });
+        if (i < 10) baiBao.push({
+          tieuDe: $(el).attr("title") || $(el).text().trim(),
+          lienKet: $(el).attr("href")
+        });
       });
-    } else if (source === "dantri") {
+      // Phòng khi giao diện thay đổi
+      if (baiBao.length === 0) {
+        $("article a").each((i, el) => {
+          if (i < 10) baiBao.push({
+            tieuDe: $(el).text().trim(),
+            lienKet: $(el).attr("href")
+          });
+        });
+      }
+    } else if (nguon === "dantri") {
       $(".news-item a").each((i, el) => {
-        if (i < 10) list.push({ title: $(el).text().trim(), link: "https://dantri.com.vn" + $(el).attr("href") });
+        if (i < 10) baiBao.push({
+          tieuDe: $(el).text().trim(),
+          lienKet: "https://dantri.com.vn" + $(el).attr("href")
+        });
       });
-    } else if (source === "24h") {
-      $(".cate-24h-foot-home a").each((i, el) => {
-        if (i < 10) list.push({ title: $(el).text().trim(), link: "https://www.24h.com.vn" + $(el).attr("href") });
+    } else if (nguon === "24h") {
+      $(".cate-24h-foot-home a, .title_news_home a").each((i, el) => {
+        if (i < 10) baiBao.push({
+          tieuDe: $(el).text().trim(),
+          lienKet: "https://www.24h.com.vn" + $(el).attr("href")
+        });
       });
     }
 
-    return { statusCode: 200, body: JSON.stringify({ source, count: list.length, data: list }, null, 2) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        nguon,
+        tongSo: baiBao.length,
+        duLieu: baiBao.length ? baiBao : "Không lấy được dữ liệu (có thể bị chặn Cloudflare)"
+      }, null, 2)
+    };
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to fetch news", details: e.message }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ loi: "Không thể tải trang báo", chiTiet: e.message })
+    };
   }
 }
 
-/* ========================= 🔍 SCAN API ========================= */
-async function scanSite(event) {
+// =================================================
+// 🧠 KIỂM TRA WEBSITE
+// =================================================
+async function quetTrangWeb(event) {
   const q = event.queryStringParameters || {};
   const rawUrl = q.url;
-  const deep = q.deep === "true" || q.deep === "1";
-  const maxLinks = Math.min(parseInt(q.maxLinks || "20", 10), 50);
-  if (!rawUrl) return { statusCode: 400, body: JSON.stringify({ error: "Missing ?url=" }) };
+  const cheDo = (q.chedo || "nhanh").toLowerCase(); // nhanh hoặc chamsoc (chuyên sâu)
 
-  let target;
-  try {
-    target = new URL(rawUrl);
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Invalid URL" }) };
+  if (!rawUrl) {
+    return { statusCode: 400, body: JSON.stringify({ loi: "Thiếu tham số ?url=" }) };
   }
 
-  const result = {
-    url: target.href,
-    host: target.hostname,
-    timestamp: new Date().toISOString(),
-    summary: {},
-    details: {}
+  let mucTieu;
+  try {
+    mucTieu = new URL(rawUrl);
+  } catch (e) {
+    return { statusCode: 400, body: JSON.stringify({ loi: "Địa chỉ URL không hợp lệ" }) };
+  }
+
+  const ketQua = {
+    url: mucTieu.href,
+    tenmien: mucTieu.hostname,
+    chedo: cheDo,
+    thoiGian: new Date().toISOString(),
+    tomtat: {},
+    chiTiet: {}
   };
 
-  // 1️⃣ HTTP fetch
-  let resp = null;
+  // 1️⃣ Kiểm tra phản hồi HTTP
+  let phanHoi = null;
   try {
     const t0 = Date.now();
-    resp = await axios.get(target.href, { timeout: 20000, validateStatus: null, headers: { "User-Agent": "Netlify-DeepScan/1.0" } });
-    result.summary.responseTimeMs = Date.now() - t0;
-    result.summary.status = resp.status;
-    result.summary.reachable = resp.status < 400;
+    phanHoi = await axios.get(mucTieu.href, {
+      timeout: 15000,
+      validateStatus: null,
+      headers: { "User-Agent": "Mozilla/5.0 (Netlify-Scan)" }
+    });
+    ketQua.tomtAt = {
+      trangThai: phanHoi.status,
+      phanHoiMs: Date.now() - t0
+    };
   } catch (e) {
-    result.summary.reachable = false;
-    result.details.fetchError = e.message;
+    return { statusCode: 500, body: JSON.stringify({ loi: "Không thể truy cập website", chiTiet: e.message }) };
   }
 
-  // 2️⃣ TLS certificate
-  if (target.protocol === "https:") {
+  // 2️⃣ Kiểm tra chứng chỉ SSL (nếu HTTPS)
+  if (mucTieu.protocol === "https:") {
     try {
-      const cert = await getCertificate(target.hostname);
-      result.details.tls = {
-        subject: cert.subject,
-        issuer: cert.issuer,
-        valid_from: cert.valid_from,
-        valid_to: cert.valid_to,
-        days_to_expiry: calcDaysToExpiry(cert.valid_to),
-        valid_now: isCertValidNow(cert)
+      const cert = await layChungChi(mucTieu.hostname);
+      ketQua.chiTiet.ssl = {
+        nhaCungCap: cert.issuer,
+        hopLeDen: cert.valid_to,
+        hopLeTu: cert.valid_from
       };
     } catch (e) {
-      result.details.tls_error = e.message;
+      ketQua.chiTiet.ssl = { loi: e.message };
     }
   }
 
-  // 3️⃣ Headers & Cookies
-  const h = resp?.headers || {};
-  result.details.securityHeaders = {
-    hsts: !!h["strict-transport-security"],
-    csp: !!h["content-security-policy"],
-    xFrame: !!h["x-frame-options"],
-    xContent: !!h["x-content-type-options"],
-    cors: !!h["access-control-allow-origin"]
+  // 3️⃣ Kiểm tra header bảo mật
+  const h = phanHoi.headers || {};
+  ketQua.chiTiet.baoMat = {
+    HSTS: !!h["strict-transport-security"],
+    CSP: !!h["content-security-policy"],
+    XFrame: !!h["x-frame-options"],
+    XContentType: !!h["x-content-type-options"],
+    CORS: !!h["access-control-allow-origin"]
   };
 
-  if (h["set-cookie"]) result.details.cookies = analyzeCookies(h["set-cookie"]);
-
-  // 4️⃣ DNS
+  // 4️⃣ DNS cơ bản
   try {
-    const [mx, txt, ns] = await Promise.all([
-      dns.resolveMx(target.hostname).catch(() => null),
-      dns.resolveTxt(target.hostname).catch(() => null),
-      dns.resolveNs(target.hostname).catch(() => null)
+    const [mx, ns, txt] = await Promise.all([
+      dns.resolveMx(mucTieu.hostname).catch(() => null),
+      dns.resolveNs(mucTieu.hostname).catch(() => null),
+      dns.resolveTxt(mucTieu.hostname).catch(() => null)
     ]);
-    result.details.dns = { mx, ns, txt };
+    ketQua.chiTiet.dns = { mx, ns, txt };
   } catch (e) {
-    result.details.dns_error = e.message;
+    ketQua.chiTiet.dns = { loi: e.message };
   }
 
-  // 5️⃣ Deep crawl
-  if (deep && resp?.data) {
-    const $ = cheerio.load(resp.data);
-    const links = new Set();
+  // 5️⃣ Nếu quét "chuyên sâu" thì kiểm tra link con trong trang
+  if (cheDo === "chamsoc" && phanHoi.data) {
+    const $ = cheerio.load(phanHoi.data);
+    const linkCon = new Set();
     $("a[href]").each((_, el) => {
       const href = $(el).attr("href");
-      if (!href) return;
       try {
-        const u = new URL(href, target.origin);
-        if (u.hostname === target.hostname) links.add(u.href);
+        const u = new URL(href, mucTieu.origin);
+        if (u.hostname === mucTieu.hostname) linkCon.add(u.href);
       } catch {}
     });
 
-    const arr = Array.from(links).slice(0, maxLinks);
-    const checks = await Promise.all(arr.map(async (u) => {
+    const arr = Array.from(linkCon).slice(0, 20);
+    const ketQuaCon = await Promise.all(arr.map(async (u) => {
       try {
-        const r = await axios.head(u, { timeout: 8000, validateStatus: null });
-        return { url: u, status: r.status, hasCSP: !!r.headers["content-security-policy"] };
+        const r = await axios.head(u, { timeout: 5000, validateStatus: null });
+        return { url: u, trangThai: r.status };
       } catch (e) {
-        return { url: u, error: e.message };
+        return { url: u, loi: e.message };
       }
     }));
-    result.details.deep = { total: arr.length, sample: checks };
+    ketQua.chiTiet.quetSau = { soLuong: arr.length, ketQuaCon };
   }
 
-  // 6️⃣ Scoring
-  result.summary.score = computeScore(result);
-
-  return { statusCode: 200, body: JSON.stringify(result, null, 2) };
+  return {
+    statusCode: 200,
+    body: JSON.stringify(ketQua, null, 2)
+  };
 }
 
-/* ========================= 🔧 HELPERS ========================= */
-function analyzeCookies(list) {
-  const arr = Array.isArray(list) ? list : [list];
-  return arr.map((c) => ({
-    raw: c,
-    secure: /; *secure/i.test(c),
-    httpOnly: /; *httponly/i.test(c),
-    sameSite: (c.match(/; *samesite=(\w+)/i) || [])[1] || null
-  }));
-}
-
-function calcDaysToExpiry(valid_to) {
-  try {
-    const d = new Date(valid_to);
-    const diff = d - new Date();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  } catch {
-    return null;
-  }
-}
-
-function isCertValidNow(cert) {
-  try {
-    const from = new Date(cert.valid_from);
-    const to = new Date(cert.valid_to);
-    const now = new Date();
-    return now >= from && now <= to;
-  } catch {
-    return false;
-  }
-}
-
-async function getCertificate(host) {
+// =================================================
+// ⚙️ HÀM PHỤ TRỢ
+// =================================================
+async function layChungChi(host) {
   return new Promise((resolve, reject) => {
     const socket = tls.connect(443, host, { servername: host, timeout: 8000 }, () => {
       const cert = socket.getPeerCertificate(true);
       socket.end();
-      if (!cert || Object.keys(cert).length === 0) return reject(new Error("No certificate retrieved"));
+      if (!cert || Object.keys(cert).length === 0) return reject(new Error("Không lấy được chứng chỉ SSL"));
       resolve(cert);
     });
     socket.on("error", reject);
-    socket.on("timeout", () => reject(new Error("TLS timeout")));
+    socket.on("timeout", () => reject(new Error("Hết thời gian kết nối SSL")));
   });
-}
-
-function computeScore(result) {
-  let score = 100;
-  if (!result.summary.reachable) return 0;
-  const h = result.details.securityHeaders || {};
-  if (!h.hsts) score -= 20;
-  if (!h.csp) score -= 20;
-  if (!h.xFrame) score -= 10;
-  if (!h.xContent) score -= 10;
-  if (result.details.tls && result.details.tls.days_to_expiry < 14) score -= 10;
-  return Math.max(0, score);
 }
