@@ -1,3 +1,21 @@
 [build]
   functions = "netlify/functions"
   node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/news"
+  to = "/.netlify/functions/api/news"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/scan"
+  to = "/.netlify/functions/api/scan"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = false
