@@ -7,16 +7,11 @@
   external_node_modules = ["axios", "cheerio"]
 
 [[redirects]]
-  from = "/news"
-  to = "/.netlify/functions/api/news"
+  from = "/bao"
+  to = "/.netlify/functions/api/bao"
   status = 200
 
 [[redirects]]
-  from = "/scan"
-  to = "/.netlify/functions/api/scan"
-  status = 200
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
+  from = "/kiemtra"
+  to = "/.netlify/functions/api/kiemtra"
   status = 200
