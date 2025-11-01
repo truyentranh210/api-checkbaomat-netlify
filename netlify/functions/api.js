@@ -49,7 +49,7 @@ async function hienThiHome() {
         thongtin: "API Tổng hợp Báo + Kiểm tra Website (phiên bản Netlify)",
         huongdan: "Sử dụng theo đường dẫn dưới đây:",
         chucNang,
-        tacGia: "truyentranh210",
+        tacGia: "ZheeDevVn",
         capNhat: new Date().toISOString(),
       },
       null,
