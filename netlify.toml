@@ -6,12 +6,20 @@
   node_bundler = "esbuild"
   external_node_modules = ["axios", "cheerio"]
 
+# 📰 Lấy tin tức
 [[redirects]]
   from = "/bao"
   to = "/.netlify/functions/api/bao"
   status = 200
 
+# 🧠 Kiểm tra website
 [[redirects]]
   from = "/kiemtra"
   to = "/.netlify/functions/api/kiemtra"
+  status = 200
+
+# 🏠 Trang chủ hiển thị toàn bộ chức năng
+[[redirects]]
+  from = "/home"
+  to = "/.netlify/functions/api/home"
   status = 200
